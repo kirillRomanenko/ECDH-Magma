@@ -8,19 +8,14 @@
 #include <vector>
 #include <cstring>
 
-// Размер блока для Магмы (64 бита)
 #define BLOCK_SIZE 8
-
-// Размер ключа для Магмы (256 бит)
 #define KEY_SIZE 32
 
-// Функция для вывода ошибок OpenSSL
 void handleErrors() {
     ERR_print_errors_fp(stderr);
     abort();
 }
 
-// Таблица замен (S-блоки) для Магмы
 const unsigned char SBOX[8][16] = {
     {0xC, 0x4, 0x6, 0x2, 0xA, 0x5, 0xB, 0x9, 0xE, 0x8, 0xD, 0x7, 0x0, 0x3, 0xF, 0x1},
     {0x6, 0x8, 0x2, 0x3, 0x9, 0xA, 0x5, 0xC, 0x1, 0xE, 0x4, 0x7, 0xB, 0xD, 0x0, 0xF},
@@ -32,12 +27,10 @@ const unsigned char SBOX[8][16] = {
     {0x1, 0x7, 0xE, 0xD, 0x0, 0x5, 0x8, 0x3, 0x4, 0xF, 0xA, 0x6, 0x9, 0xC, 0xB, 0x2}
 };
 
-// Функция для замены по S-блоку
 unsigned char substitute(unsigned char value, int sboxIndex) {
     return SBOX[sboxIndex][value & 0xF];
 }
 
-// Основная функция шифрования Магма
 void magma_encrypt(const unsigned char *plaintext, unsigned char *ciphertext, const unsigned char *key) {
     uint32_t left = (plaintext[0] << 24) | (plaintext[1] << 16) | (plaintext[2] << 8) | plaintext[3];
     uint32_t right = (plaintext[4] << 24) | (plaintext[5] << 16) | (plaintext[6] << 8) | plaintext[7];
@@ -61,23 +54,23 @@ void magma_encrypt(const unsigned char *plaintext, unsigned char *ciphertext, co
     ciphertext[7] = left & 0xFF;
 }
 
-// Функция для шифрования блока данных в режиме CTR
-void encryptBlockCTR(const unsigned char *plaintext, unsigned char *ciphertext, const unsigned char *key, unsigned char *iv) {
-    unsigned char encryptedCounter[BLOCK_SIZE];
-    magma_encrypt(iv, encryptedCounter, key);
+// Функция для шифрования блока данных в режиме CBC
+void encryptBlockCBC(const unsigned char *plaintext, unsigned char *ciphertext, const unsigned char *key, unsigned char *iv) {
+    unsigned char xorResult[BLOCK_SIZE];
 
+    // XOR с предыдущим зашифрованным блоком (или IV для первого блока)
     for (int i = 0; i < BLOCK_SIZE; i++) {
-        ciphertext[i] = plaintext[i] ^ encryptedCounter[i];
+        xorResult[i] = plaintext[i] ^ iv[i];
     }
 
-    // Увеличиваем счетчик (IV)
-    for (int i = BLOCK_SIZE - 1; i >= 0; i--) {
-        if (++iv[i]) break;
-    }
+    // Шифруем результат XOR
+    magma_encrypt(xorResult, ciphertext, key);
+
+    // Обновляем IV для следующего блока
+    memcpy(iv, ciphertext, BLOCK_SIZE);
 }
 
 int main() {
-    // Инициализация OpenSSL
     OpenSSL_add_all_algorithms();
     ERR_load_crypto_strings();
 
@@ -90,7 +83,7 @@ int main() {
 
     // Вычисление общего секрета
     const EC_GROUP *group = EC_KEY_get0_group(key1);
-    int secret_len = (EC_GROUP_get_degree(group) + 7) / 8; // Размер секрета в байтах
+    int secret_len = (EC_GROUP_get_degree(group) + 7) / 8;
     unsigned char *secret1 = (unsigned char *)malloc(secret_len);
     unsigned char *secret2 = (unsigned char *)malloc(secret_len);
 
@@ -106,7 +99,7 @@ int main() {
     unsigned char key[KEY_SIZE];
     memcpy(key, secret1, KEY_SIZE);
 
-    // Генерация IV для режима CTR
+    // Генерация IV для режима CBC
     unsigned char iv[BLOCK_SIZE];
     if (!RAND_bytes(iv, sizeof(iv))) {
         handleErrors();
@@ -126,6 +119,9 @@ int main() {
         return 1;
     }
 
+    // Записываем IV в начало выходного файла
+    outFile.write(reinterpret_cast<char*>(iv), BLOCK_SIZE);
+
     // Чтение и шифрование файла по блокам
     unsigned char plaintext[BLOCK_SIZE];
     unsigned char ciphertext[BLOCK_SIZE];
@@ -135,7 +131,7 @@ int main() {
     while (file.read(reinterpret_cast<char*>(plaintext), BLOCK_SIZE)) {
         auto startBlock = std::chrono::high_resolution_clock::now();
 
-        encryptBlockCTR(plaintext, ciphertext, key, iv);
+        encryptBlockCBC(plaintext, ciphertext, key, iv);
 
         auto endBlock = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsedBlock = endBlock - startBlock;
