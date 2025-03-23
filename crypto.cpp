@@ -129,13 +129,13 @@ int main() {
     auto startTotal = std::chrono::high_resolution_clock::now();
 
     while (file.read(reinterpret_cast<char*>(plaintext), BLOCK_SIZE)) {
-        auto startBlock = std::chrono::high_resolution_clock::now();
+        // auto startBlock = std::chrono::high_resolution_clock::now();
 
         encryptBlockCBC(plaintext, ciphertext, key, iv);
 
-        auto endBlock = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsedBlock = endBlock - startBlock;
-        std::cout << "Время шифрования блока " << blockCount << ": " << elapsedBlock.count() << " секунд" << std::endl;
+        // auto endBlock = std::chrono::high_resolution_clock::now();
+        // std::chrono::duration<double> elapsedBlock = endBlock - startBlock;
+        // std::cout << "Время шифрования блока " << blockCount << ": " << elapsedBlock.count() << " секунд" << std::endl;
 
         outFile.write(reinterpret_cast<char*>(ciphertext), BLOCK_SIZE);
         blockCount++;
