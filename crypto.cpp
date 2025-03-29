@@ -8,6 +8,7 @@
 #include <openssl/err.h>
 #include <openssl/params.h>
 #include <openssl/core_names.h>
+#include <openssl/rand.h>
 
 // Размер блока для Магмы (8 байт)
 const size_t BLOCK_SIZE = 8;
